@@ -83,9 +83,11 @@ public class TxDemo {
                 ctx.replace(userTx, user);
                 ctx.replace(userEventsTx, userEvents);
 
+                //uncomment this line to force a rollback
+                //throw new IllegalStateException("Emulating a rollback");
 
                 //optional
-                ctx.commit();
+                //ctx.commit();
             });
         } catch (TransactionFailed e) {
             e.printStackTrace();
