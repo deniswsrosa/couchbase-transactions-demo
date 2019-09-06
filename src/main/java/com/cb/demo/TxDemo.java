@@ -19,9 +19,22 @@ import java.util.Date;
 
 
 /**
- * How to run this demo:
+ * ###### Import the data with:
+ * cbimport  json -c couchbase://127.0.0.1 -u Administrator -p password -b test -d file:///Users/deniswsrosa/Downloads/crm_list.json -f list -g %id%  -t 4
+ *
+ * ###### How to run this demo:
  * 1) Change the CB's connection/username/password
  * 2) right click on this class and in the context menu click "Run"
+ *
+ * ###### Use Case:
+ *
+ *  In this use case we want to keep track of all interactions with an account in order to build a customer360 system,
+ *  Whenever an email is sent to a client we will execute the following:
+ *
+ *  1) Increase the total of interactions whith the target account into the "account"
+ *  2) Update the lastInteraction
+ *  2) Add an item to the accountEvent document with the type of the event and its content.
+ *
  */
 public class TxDemo {
 
@@ -30,8 +43,8 @@ public class TxDemo {
     private static final String USERNAME = "test";
     private static final String PASSWORD = "couchbase";
 
-    private static String customerId = "andy";
-    private static String customerEvtId = "andyEvents";
+    private static String accountId = "acc1";
+    private static String accountEvtId = "acc1evt";
     private static final Logger logger = LoggerFactory.getLogger(TxDemo.class);
 
     public static void main(String[] args) {
@@ -41,8 +54,8 @@ public class TxDemo {
         Bucket bucket = cluster.bucket("test");
         Collection col = bucket.defaultCollection();
 
-        //2) Populate the database
-        createCustomer(bucket);
+        //2) Create Event for the account
+        createAccountEvent(bucket);
 
         // 3) Create the transaction config :
         // Durability: NONE/MAJORITY/PERSIST_TO_MAJORITY/MAJORITY_AND_PERSIST_ON_MASTER
@@ -57,22 +70,21 @@ public class TxDemo {
 
             transactions.run((ctx) -> {
 
-                logger.info("Starting transaction, player {} is hitting monster {} for {} points of damage",
-                        "a", "b", "c");
+                logger.info("Starting transaction for account {} and accountEvt {}", accountId, accountEvtId);
                 //Getting all documents involved in the transactions
                 //There is no virtual limit on number of documents per transaction
-                TransactionJsonDocument userTx = ctx.getOrError(col, customerId);
-                TransactionJsonDocument userEventsTx = ctx.getOrError(col, customerEvtId);
+                TransactionJsonDocument accountTx = ctx.getOrError(col, accountId);
+                TransactionJsonDocument accountEventsTx = ctx.getOrError(col, accountEvtId);
 
-                JsonObject user = userTx.contentAsObject();
-                JsonObject userEvents = userEventsTx.contentAsObject();
-
+                JsonObject account = accountTx.contentAsObject();
+                JsonObject accountEvents = accountEventsTx.contentAsObject();
 
                 //updating documents
-                String message = "Hello there! Your trial will expire in 3 days.";
+                String message = "Hey! What's up?";
                 sendEmail(message);
-                user.put("followups", user.getInt("followups")+1);
-                userEvents.getArray("events").add(
+                account.put("followups", account.getInt("followups") == null? 1: account.getInt("followups")+1);
+                account.put("lastInteraction", new Date().getTime());
+                accountEvents.getArray("events").add(
                     JsonObject.create()
                             .put("type", "EMAIL")
                             .put("evtDate", new Date().getTime())
@@ -80,8 +92,8 @@ public class TxDemo {
                 );
 
                 //replace both documents
-                ctx.replace(userTx, user);
-                ctx.replace(userEventsTx, userEvents);
+                ctx.replace(accountTx, account);
+                ctx.replace(accountEventsTx, accountEvents);
 
                 //uncomment this line to force a rollback
                 //throw new IllegalStateException("Emulating a rollback");
@@ -104,36 +116,19 @@ public class TxDemo {
     }
 
 
-    private static void createCustomer(Bucket bucket) {
-
-
-        try {
-            bucket.defaultCollection().exists(customerId);
-            logger.info("User already exists...");
-        } catch(KeyNotFoundException e) {
-            logger.info("Creating user ...");
-            JsonObject customer = JsonObject.create()
-                    .put("type", "customer")
-                    .put("name", "Andy")
-                    .put("followups", 0);
-            bucket.defaultCollection().upsert(customerId, customer);
-        }
-
+    private static void createAccountEvent(Bucket bucket) {
 
         try {
-            bucket.defaultCollection().exists(customerEvtId);
-            logger.info("User events exists...");
+            bucket.defaultCollection().exists(accountEvtId);
+            logger.info("Account events already exists...");
         } catch(KeyNotFoundException e) {
-            logger.info("Creating user events...");
+            logger.info("Creating account events...");
             JsonObject customerEvents = JsonObject.create()
-                    .put("type", "events")
-                    .put("customerId", "customerId")
+                    .put("type", "accountEvents")
+                    .put("accountId", accountId)
                     .put( "events",  JsonArray.empty());
-            bucket.defaultCollection().upsert(customerEvtId, customerEvents);
+            bucket.defaultCollection().upsert(accountEvtId, customerEvents);
         }
     }
 
-    private static void deleteAll(Cluster cluster) {
-        cluster.query("delete from "+BUCKET);
-    }
 }
