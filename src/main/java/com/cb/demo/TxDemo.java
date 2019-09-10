@@ -51,7 +51,7 @@ public class TxDemo {
 
         //1) Connect to the cluster
         Cluster cluster = Cluster.connect(CLUSTER_ADDRESS, USERNAME, PASSWORD);
-        Bucket bucket = cluster.bucket("test");
+        Bucket bucket = cluster.bucket(BUCKET);
         Collection col = bucket.defaultCollection();
 
         //2) Create Event for the account
